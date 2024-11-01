@@ -1,0 +1,37 @@
+name: Portal Bridge [Release]
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment Name'
+        type: choice
+        options:
+          - 'Cloudflare-Preview'
+          - 'Cloudflare-Page-Deploy'
+        required: true
+        default: 'Cloudflare-Page-Deploy'
+      # connect-branch:
+      #   description: 'Branch Name'
+      #   type: string
+      #   required: true
+      #   default: 'portal-bridge'
+      advanced-tools-branch:
+        description: 'Branch Name'
+        type: string
+        required: true
+        default: 'advanced-tools'
+jobs:
+  build:
+    name: "Build Release"
+    uses: ./.github/workflows/build.yml
+    with:
+      name: prod
+      # connect-branch: ${{inputs.connect-branch}}
+      advanced-tools-branch: ${{inputs.advanced-tools-branch}}
+      environment: ${{inputs.environment}}
+      project-branch: main
+      public-url: ''
+      wac-url: "https://wac.gfx.xyz"
+      app-domain: portalbridge.com
+    secrets: inherit

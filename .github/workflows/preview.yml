@@ -1,0 +1,68 @@
+name: Portal Bridge [Preview]
+
+on: 
+  pull_request:
+#    paths:
+#      - '!apps/token-list/**'
+
+jobs:
+  branch-sha:
+    name: Compute Branch Sha
+    runs-on: ubuntu-latest
+    concurrency:
+        group: ${{ github.ref }}-preview-sha
+    outputs:
+      value: ${{ steps.set-version.outputs._BRANCH_NAME_SHA }}
+    steps:
+      - name: Set Version
+        id: set-version
+        run: echo "_BRANCH_NAME_SHA=$(echo ${{ github.event.pull_request.head.ref }} | sha256sum | cut -c -10)" >> "${GITHUB_OUTPUT}"
+  build:
+    name: "Build Preview"
+    uses: ./.github/workflows/build.yml
+    with:
+      name: preview
+      separator: P
+      advanced-tools-branch: advanced-tools
+      environment: Cloudflare-Preview
+      public-url: "/${{ needs.branch-sha.outputs.value }}"
+      wac-url: "https://wac.gfx.xyz"
+      project-branch: ${{ github.event.pull_request.head.ref }}
+      app-domain: preview.portalbridge.com
+    secrets: inherit
+    needs: 
+      - branch-sha
+  deploy:
+    name: "Deploy Preview"
+    needs:
+      - build
+      - branch-sha
+    runs-on: "ubuntu-latest"
+    concurrency:
+      group: ${{ github.ref }}-deploy-preview
+      cancel-in-progress: true
+    permissions:
+      contents: write
+    environment: Cloudflare-Preview
+    steps:
+      - name: Checkout preview branch
+        uses: actions/checkout@v3
+        with:
+          ref: preview
+      - name: Setup Git
+        run: |
+          git config user.name "xLabs CI"
+          git config user.email "devops@xlabs.xyz"
+      - name: Trigger a preview Deploy
+        run: |
+          sleep 30s
+          mkdir -p preview/${{ needs.branch-sha.outputs.value }}
+          pushd preview/${{ needs.branch-sha.outputs.value  }}
+          [[ ! -f .latest ]] && touch .latest
+          [[ ! -f .artifacts ]] && touch .artifacts
+          cat .latest >> .artifacts
+          echo ${{ needs.build.outputs.pkg-version }} > .latest
+          git add .artifacts .latest
+          git commit -m"Update preview artifacts ${{ needs.build.outputs.pkg-version }}"
+          git push
+          echo "The preview URL is: ${{ vars.PREVIEW_ROOT_URL }}/${{ needs.branch-sha.outputs.value }}/" >> ${GITHUB_STEP_SUMMARY}
